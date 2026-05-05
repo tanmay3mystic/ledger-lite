@@ -2,17 +2,21 @@
   "name": "ledger-lite",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*"
-  ],
   "scripts": {
-    "dev": "turbo run dev",
+    "setup": "pnpm install && pnpm setup:parser",
+    "setup:parser": "cd apps/parser && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+
+    "dev": "pnpm install --silent && concurrently --kill-others-on-fail -n web,api,parser -c green,blue,yellow \"pnpm dev:web\" \"pnpm dev:api\" \"pnpm dev:parser\"",
+    "dev:web": "pnpm install --silent && pnpm --filter @ledger-lite/web dev",
+    "dev:api": "pnpm install --silent && pnpm --filter @ledger-lite/api dev",
+    "dev:parser": "[ -d apps/parser/.venv ] || pnpm setup:parser && cd apps/parser && .venv/bin/uvicorn main:app --reload --port 8001",
+
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "type-check": "turbo run type-check",
-    "parser": "cd apps/parser && uvicorn main:app --reload --port 8001"
+    "type-check": "turbo run type-check"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },

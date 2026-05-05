@@ -11,6 +11,7 @@ interface TransactionStore {
 
   setView: (view: AppView) => void;
   setTransactions: (txns: Transaction[]) => void;
+  appendTransactions: (txns: Transaction[], fileNames: string[]) => void;
   setUploadedFileNames: (names: string[]) => void;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
   reset: () => void;
@@ -26,6 +27,15 @@ export const useTransactionStore = create<TransactionStore>((set) => ({
 
   setTransactions: (transactions) =>
     set({ transactions, editedIds: new Set() }),
+
+  appendTransactions: (newTxns, fileNames) =>
+    set((state) => ({
+      // Merge and re-sort by date ascending
+      transactions: [...state.transactions, ...newTxns].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      ),
+      uploadedFileNames: [...state.uploadedFileNames, ...fileNames],
+    })),
 
   setUploadedFileNames: (uploadedFileNames) => set({ uploadedFileNames }),
 
