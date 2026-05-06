@@ -129,7 +129,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       - name: Deploy API → Railway staging
-        run: railway up --environment staging --detach
+        run: railway up --detach
         working-directory: apps/api
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -158,7 +158,7 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy Parser → Railway staging
-        run: railway up --environment staging --detach
+        run: railway up --detach
         working-directory: apps/parser
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
