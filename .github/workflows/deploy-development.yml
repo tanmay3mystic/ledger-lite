@@ -99,7 +99,6 @@ jobs:
           PREVIEW_URL=$(vercel deploy --yes \
             --token "$VERCEL_TOKEN")
           echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
-        working-directory: apps/web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

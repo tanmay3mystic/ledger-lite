@@ -114,7 +114,6 @@ jobs:
           PROD_URL=$(vercel deploy --prod --yes \
             --token "$VERCEL_TOKEN")
           echo "prod_url=$PROD_URL" >> "$GITHUB_OUTPUT"
-        working-directory: apps/web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
