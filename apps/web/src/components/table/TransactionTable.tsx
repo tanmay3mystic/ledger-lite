@@ -8,7 +8,8 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useMemo, useRef, useState } from "react";
 import { Transaction, CATEGORIES } from "@/types/transaction";
 import { useTransactionStore } from "@/store/transactionStore";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -16,7 +17,6 @@ import { cn, formatCurrency } from "@/lib/utils";
 const col = createColumnHelper<Transaction>();
 
 interface Props {
-  /** Pre-filtered list from TableScreen. Sorting still handled here via TanStack. */
   data: Transaction[];
   allCount: number;
 }
@@ -24,6 +24,7 @@ interface Props {
 export function TransactionTable({ data, allCount }: Props) {
   const { editedIds, updateTransaction } = useTransactionStore();
   const [sorting, setSorting] = useState<SortingState>([{ id: "date", desc: false }]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const columns = useMemo(
     () => [
@@ -122,6 +123,15 @@ export function TransactionTable({ data, allCount }: Props) {
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const { rows } = table.getRowModel();
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 41,
+    overscan: 20,
+  });
+
   const dateSort = sorting.find((s) => s.id === "date");
   const setDateSort = (desc: boolean) =>
     setSorting((prev) => [
@@ -185,8 +195,8 @@ export function TransactionTable({ data, allCount }: Props) {
         )}
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
+      {/* Virtualized table */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
         {data.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400">
             <svg className="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,16 +205,27 @@ export function TransactionTable({ data, allCount }: Props) {
             <p className="text-sm">No transactions match your filters.</p>
           </div>
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+          <table
+            className="border-collapse text-sm"
+            style={{ display: "grid", width: "100%" }}
+          >
+            <thead
+              className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200"
+              style={{ display: "grid" }}
+            >
               {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id}>
-                  <th className="w-10 px-4 py-3 text-left text-xs font-semibold text-gray-400">#</th>
+                <tr key={hg.id} style={{ display: "flex", width: "100%" }}>
+                  <th
+                    style={{ width: 40 }}
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-400 flex items-center shrink-0"
+                  >
+                    #
+                  </th>
                   {hg.headers.map((header) => (
                     <th
                       key={header.id}
                       style={{ width: header.getSize() }}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide select-none"
+                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide select-none flex items-center shrink-0"
                     >
                       <button
                         className="flex items-center gap-1 hover:text-gray-800 transition-colors"
@@ -218,34 +239,59 @@ export function TransactionTable({ data, allCount }: Props) {
                 </tr>
               ))}
             </thead>
-            <tbody>
-              {table.getRowModel().rows.map((row, idx) => (
-                <tr
-                  key={row.id}
-                  className={cn(
-                    "border-b border-gray-100 transition-colors",
-                    editedIds.has(row.original.id)
-                      ? "bg-amber-50/60"
-                      : idx % 2 === 0
-                      ? "bg-white"
-                      : "bg-gray-50/50",
-                    "hover:bg-blue-50/30"
-                  )}
-                >
-                  <td className="px-4 py-2 text-xs text-gray-300 tabular-nums">{idx + 1}</td>
-                  {row.getVisibleCells().map((cell) => (
+            <tbody
+              style={{
+                display: "grid",
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                position: "relative",
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                return (
+                  <tr
+                    key={row.id}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      display: "flex",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className={cn(
+                      "border-b border-gray-100 transition-colors",
+                      editedIds.has(row.original.id)
+                        ? "bg-amber-50/60"
+                        : virtualRow.index % 2 === 0
+                        ? "bg-white"
+                        : "bg-gray-50/50",
+                      "hover:bg-blue-50/30"
+                    )}
+                  >
                     <td
-                      key={cell.id}
-                      className={cn(
-                        "px-2 py-1.5 editable-cell",
-                        editedIds.has(row.original.id) && "cell-edited"
-                      )}
+                      style={{ width: 40 }}
+                      className="px-4 py-2 text-xs text-gray-300 tabular-nums flex items-center shrink-0"
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {virtualRow.index + 1}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                        className={cn(
+                          "px-2 py-1.5 flex items-center shrink-0 min-w-0 overflow-hidden",
+                          editedIds.has(row.original.id) && "cell-edited"
+                        )}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -293,7 +339,7 @@ function EditableCell({ value, type, displayValue, onChange }: EditableCellProps
   return (
     <div
       onClick={() => { setDraft(value); setEditing(true); }}
-      className="min-h-[24px] px-2 py-0.5 cursor-text rounded hover:bg-blue-50 transition-colors truncate"
+      className="min-h-[24px] px-2 py-0.5 cursor-text rounded hover:bg-blue-50 transition-colors truncate w-full"
       title={value}
     >
       {(displayValue ?? value) || <span className="text-gray-300 italic text-xs">—</span>}

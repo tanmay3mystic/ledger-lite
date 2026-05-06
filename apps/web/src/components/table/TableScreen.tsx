@@ -4,9 +4,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
-import { exportTransactions, uploadFiles } from "@/lib/api";
+import { uploadFiles } from "@/lib/api";
+import { exportToExcel } from "@/lib/export";
 import { useTransactionStore } from "@/store/transactionStore";
-import { cn, downloadBlob, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { TransactionTable } from "./TransactionTable";
 import { Transaction } from "@/types/transaction";
 
@@ -107,15 +108,16 @@ export function TableScreen() {
   // Export uses only visible rows when a filter is active
   const exportData = isFiltered ? filteredData : transactions;
 
-  const exportMutation = useMutation({
-    mutationFn: () => exportTransactions(exportData),
-    onSuccess: (blob) => {
+  const handleExport = () => {
+    try {
       const suffix = isFiltered ? `-filtered-${filteredData.length}` : "";
-      downloadBlob(blob, `transactions-tally${suffix}.xlsx`);
+      exportToExcel(exportData, `transactions-tally${suffix}.xlsx`);
       setExported(true);
       setTimeout(() => setExported(false), 3000);
-    },
-  });
+    } catch {
+      toast.error("Export failed. Please try again.");
+    }
+  };
 
   const totalCredit = filteredData.filter((t) => t.type === "credit").reduce((s, t) => s + t.amount, 0);
   const totalDebit  = filteredData.filter((t) => t.type === "debit").reduce((s, t) => s + t.amount, 0);
@@ -172,11 +174,9 @@ export function TableScreen() {
           <ExportButton
             isFiltered={isFiltered}
             filteredCount={filteredData.length}
-            isPending={exportMutation.isPending}
             isSuccess={exported}
-            isError={exportMutation.isError}
             disabled={exportData.length === 0}
-            onClick={() => exportMutation.mutate()}
+            onClick={handleExport}
           />
         </div>
       </div>
@@ -195,13 +195,11 @@ export function TableScreen() {
 // ── Export button ──────────────────────────────────────────────────────────────
 
 function ExportButton({
-  isFiltered, filteredCount, isPending, isSuccess, isError, disabled, onClick,
+  isFiltered, filteredCount, isSuccess, disabled, onClick,
 }: {
   isFiltered: boolean;
   filteredCount: number;
-  isPending: boolean;
   isSuccess: boolean;
-  isError: boolean;
   disabled: boolean;
   onClick: () => void;
 }) {
@@ -209,7 +207,7 @@ function ExportButton({
     <div className="flex flex-col items-end gap-0.5">
       <button
         onClick={onClick}
-        disabled={isPending || disabled}
+        disabled={disabled}
         className={cn(
           "flex items-center gap-2 font-semibold px-5 py-2 rounded-xl text-sm transition-colors shadow-sm text-white",
           isFiltered
@@ -217,12 +215,7 @@ function ExportButton({
             : "bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300"
         )}
       >
-        {isPending ? (
-          <>
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Exporting...
-          </>
-        ) : isSuccess ? (
+        {isSuccess ? (
           <>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -239,11 +232,8 @@ function ExportButton({
           </>
         )}
       </button>
-      {isFiltered && !isPending && !isSuccess && (
+      {isFiltered && !isSuccess && (
         <p className="text-xs text-amber-600">Active filter — full data not included</p>
-      )}
-      {isError && (
-        <p className="text-xs text-red-500">Export failed. Check API is running.</p>
       )}
     </div>
   );

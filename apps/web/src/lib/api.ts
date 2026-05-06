@@ -1,36 +1,41 @@
 import axios from "axios";
 import { Transaction } from "@/types/transaction";
 
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
+const parserApi = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_PARSER_URL ?? "http://localhost:8001",
 });
 
 export async function uploadFiles(files: File[]): Promise<Transaction[]> {
-  const form = new FormData();
-  files.forEach((f) => form.append("files", f));
+  const results = await Promise.all(
+    files.map(async (file) => {
+      const form = new FormData();
+      form.append("file", file);
 
-  try {
-    const { data } = await api.post<{ transactions: Transaction[] }>(
-      "/api/upload",
-      form,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
-    return data.transactions;
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.data?.error) {
-      throw new Error(err.response.data.error);
-    }
-    throw err;
-  }
-}
+      let data: { transactions: Omit<Transaction, "id">[] };
+      try {
+        ({ data } = await parserApi.post<{
+          transactions: Omit<Transaction, "id">[];
+        }>("/parse", form, { timeout: 30_000 }));
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.data) {
+          const detail =
+            err.response.data.detail ??
+            err.response.data.error ??
+            err.message;
+          throw new Error(`${file.name}: ${detail}`);
+        }
+        throw err;
+      }
 
-export async function exportTransactions(
-  transactions: Transaction[]
-): Promise<Blob> {
-  const { data } = await api.post(
-    "/api/export",
-    { transactions },
-    { responseType: "blob" }
+      return data.transactions.map((t) => ({
+        ...t,
+        id: crypto.randomUUID(),
+        account: t.account || file.name,
+      }));
+    })
   );
-  return data;
+
+  return results
+    .flat()
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
