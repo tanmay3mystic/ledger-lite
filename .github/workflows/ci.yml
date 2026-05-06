@@ -1,15 +1,21 @@
+# Runs on every pull request targeting development or production.
+# This is the gate that must pass before a PR can be merged.
+# Deployment is handled by separate per-branch workflows.
+
 name: CI
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [development, production]
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ─── Frontend & API (Node) ───────────────────────────────────────────────────
+  # ── Node.js: lint, typecheck, build ──────────────────────────────────────────
   node:
-    name: Node.js (type-check + lint)
+    name: Lint · Typecheck · Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,19 +29,36 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # Turbo cache keyed on lockfile + SHA; falls back to lockfile prefix
+      # so prior-commit artifacts are reused on first run of a new commit.
+      - name: Restore Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
 
-      - run: pnpm run type-check
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm run lint
+      - name: Lint
+        run: pnpm turbo lint
 
-  # ─── Python parser ───────────────────────────────────────────────────────────
+      - name: Typecheck
+        run: pnpm turbo type-check
+
+      - name: Build
+        run: pnpm turbo build
+        env:
+          # Next.js needs this at build time; placeholder is fine in CI.
+          NEXT_PUBLIC_API_URL: https://placeholder-build-only.invalid
+
+  # ── Python: install + test ────────────────────────────────────────────────────
   python:
-    name: Python (tests)
+    name: Python tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/parser
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +68,8 @@ jobs:
           cache: pip
           cache-dependency-path: apps/parser/requirements.txt
 
-      - run: pip install -r requirements.txt pytest
+      - name: Install dependencies
+        run: pip install -r apps/parser/requirements.txt
 
-      - run: pytest tests/ -v
+      - name: Run tests
+        run: python -m pytest apps/parser/tests/ -v --tb=short

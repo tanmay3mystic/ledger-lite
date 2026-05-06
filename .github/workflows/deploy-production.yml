@@ -1,0 +1,167 @@
+# Triggered on every push to the production branch.
+# CI runs first (same as development). After CI passes, the workflow pauses
+# at the `await-approval` job and sends review requests to the configured
+# reviewers of the `production` GitHub Environment. Only after a reviewer
+# clicks "Approve" do the three deploy jobs run in parallel.
+#
+# To configure reviewers:
+#   GitHub repo → Settings → Environments → production → Required reviewers
+
+name: Deploy → Production
+
+on:
+  push:
+    branches: [production]
+
+# Never cancel production deployments — a partial deploy is worse than a slow one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ── CI (same as development; must pass before any deploy) ────────────────────
+
+  node:
+    name: Lint · Typecheck · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm turbo lint
+
+      - name: Typecheck
+        run: pnpm turbo type-check
+
+      - name: Build
+        run: pnpm turbo build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.PROD_API_URL }}
+
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/parser/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r apps/parser/requirements.txt
+
+      - name: Run tests
+        run: python -m pytest apps/parser/tests/ -v --tb=short
+
+  # ── Manual approval gate ──────────────────────────────────────────────────────
+  # This job uses the `production` GitHub Environment.  Because that environment
+  # has "Required reviewers" configured, GitHub pauses the workflow here and
+  # sends review notifications.  The deploy jobs below only start once a
+  # reviewer approves this job.
+
+  await-approval:
+    name: Await Production Approval
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Approval received — proceeding with production deployment
+        run: echo "Deployment to production approved."
+
+  # ── Deploy (parallel, all three services) ────────────────────────────────────
+
+  deploy-web:
+    name: Deploy Web → Vercel (production)
+    needs: [await-approval]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.prod_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      # --prod promotes the deployment to the production domain on Vercel.
+      - name: Deploy to Vercel (production)
+        id: deploy
+        run: |
+          PROD_URL=$(vercel deploy --prod --yes \
+            --token "$VERCEL_TOKEN")
+          echo "prod_url=$PROD_URL" >> "$GITHUB_OUTPUT"
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-api:
+    name: Deploy API → Railway (production)
+    needs: [await-approval]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy API → Railway production
+        run: |
+          railway up \
+            --service "$RAILWAY_API_SERVICE_NAME" \
+            --environment production \
+            --detach
+        working-directory: apps/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_API_SERVICE_NAME: ${{ vars.RAILWAY_API_SERVICE_NAME }}
+
+  deploy-parser:
+    name: Deploy Parser → Railway (production)
+    needs: [await-approval]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy Parser → Railway production
+        run: |
+          railway up \
+            --service "$RAILWAY_PARSER_SERVICE_NAME" \
+            --environment production \
+            --detach
+        working-directory: apps/parser
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_PARSER_SERVICE_NAME: ${{ vars.RAILWAY_PARSER_SERVICE_NAME }}

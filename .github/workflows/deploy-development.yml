@@ -1,0 +1,155 @@
+# Triggered on every push to the development branch.
+# Runs the full CI suite first, then deploys all three services in parallel
+# to their staging/development environments automatically — no approval needed.
+
+name: Deploy → Development
+
+on:
+  push:
+    branches: [development]
+
+# Never cancel an in-flight development deployment; let it finish so Railway
+# and Vercel don't end up in a partial state. A follow-up push will queue next.
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+jobs:
+  # ── CI ────────────────────────────────────────────────────────────────────────
+  # Re-run CI here (not just on PRs) so a direct push to development is also
+  # gated. If CI fails, the deploy jobs never start.
+
+  node:
+    name: Lint · Typecheck · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm turbo lint
+
+      - name: Typecheck
+        run: pnpm turbo type-check
+
+      - name: Build
+        run: pnpm turbo build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.DEV_API_URL }}
+
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/parser/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r apps/parser/requirements.txt
+
+      - name: Run tests
+        run: python -m pytest apps/parser/tests/ -v --tb=short
+
+  # ── Deploy (parallel, all three services) ────────────────────────────────────
+
+  deploy-web:
+    name: Deploy Web → Vercel (preview)
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: ${{ steps.deploy.outputs.preview_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      # `vercel deploy` (without --prod) creates a preview deployment.
+      # VERCEL_ORG_ID + VERCEL_PROJECT_ID tell the CLI which project to target
+      # without requiring an interactive `vercel link` step.
+      - name: Deploy to Vercel (preview)
+        id: deploy
+        run: |
+          PREVIEW_URL=$(vercel deploy --yes \
+            --token "$VERCEL_TOKEN")
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-api:
+    name: Deploy API → Railway (staging)
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      # `railway up` from the service subdirectory uploads only that directory,
+      # using the railway.toml there for build/start configuration.
+      # --detach exits after upload so CI doesn't hang waiting for build logs.
+      - name: Deploy API → Railway staging
+        run: |
+          railway up \
+            --service "$RAILWAY_API_SERVICE_NAME" \
+            --environment staging \
+            --detach
+        working-directory: apps/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_API_SERVICE_NAME: ${{ vars.RAILWAY_API_SERVICE_NAME }}
+
+  deploy-parser:
+    name: Deploy Parser → Railway (staging)
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy Parser → Railway staging
+        run: |
+          railway up \
+            --service "$RAILWAY_PARSER_SERVICE_NAME" \
+            --environment staging \
+            --detach
+        working-directory: apps/parser
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_PARSER_SERVICE_NAME: ${{ vars.RAILWAY_PARSER_SERVICE_NAME }}
