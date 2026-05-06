@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config({ path: `.env.${process.env.NODE_ENV ?? "development"}` });
 import express from "express";
 import cors from "cors";
 import { uploadRouter } from "./routes/upload";
