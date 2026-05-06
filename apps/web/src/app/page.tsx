@@ -24,7 +24,7 @@ function Header() {
   const { view, reset } = useTransactionStore();
 
   return (
-    <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
+    <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between shadow-sm">
       <button
         onClick={reset}
         className="flex items-center gap-2 group"

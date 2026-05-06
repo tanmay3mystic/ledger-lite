@@ -126,19 +126,30 @@ export function TableScreen() {
   return (
     <div className="flex flex-col h-[calc(100vh-65px)]">
       {/* Toolbar */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="bg-white border-b border-gray-100 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-gray-800">
               {transactions.length} transactions
             </p>
-            <p className="text-xs text-gray-400 max-w-sm truncate" title={uploadedFileNames.join(", ")}>
-              {uploadedFileNames.join(", ")}
-            </p>
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {uploadedFileNames.map((name) => (
+                <span
+                  key={name}
+                  title={name}
+                  className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded max-w-[140px] sm:max-w-[200px] truncate"
+                >
+                  <svg className="w-3 h-3 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {name}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="h-8 w-px bg-gray-200" />
-          <SummaryBadge label="Total Credit" value={formatCurrency(totalCredit)} color="green" />
-          <SummaryBadge label="Total Debit"  value={formatCurrency(totalDebit)}  color="red" />
+          <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+          <SummaryBadge label="Credit" value={formatCurrency(totalCredit)} color="green" />
+          <SummaryBadge label="Debit"  value={formatCurrency(totalDebit)}  color="red" />
           {editedIds.size > 0 && (
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
               {editedIds.size} edited
@@ -146,15 +157,15 @@ export function TableScreen() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-4 py-2 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-xl transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add files
+            <span className="hidden sm:inline">Add files</span>
           </button>
 
           <ExportButton
@@ -222,7 +233,8 @@ function ExportButton({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            {isFiltered ? `Export ${filteredCount} filtered rows` : "Download Clean Excel"}
+            <span className="hidden sm:inline">{isFiltered ? `Export ${filteredCount} filtered rows` : "Download Clean Excel"}</span>
+            <span className="sm:hidden">{isFiltered ? `Export ${filteredCount}` : "Export"}</span>
           </>
         )}
       </button>
@@ -257,7 +269,7 @@ function FilterBar({
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
 
   return (
-    <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center gap-2 flex-wrap flex-shrink-0">
+    <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto scrollbar-thin">
       {/* Description */}
       <FilterInput
         icon={
@@ -485,9 +497,10 @@ function SummaryBadge({ label, value, color }: { label: string; value: string; c
 // ── Add files modal ────────────────────────────────────────────────────────────
 
 function AddFilesModal({ onClose }: { onClose: () => void }) {
-  const { appendTransactions } = useTransactionStore();
+  const { appendTransactions, uploadedFileNames: alreadyUploaded } = useTransactionStore();
   const [files, setFiles] = useState<File[]>([]);
   const [addedCount, setAddedCount] = useState<number | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string[]>([]);
 
   const uploadMutation = useMutation({
     mutationFn: uploadFiles,
@@ -499,11 +512,15 @@ function AddFilesModal({ onClose }: { onClose: () => void }) {
   });
 
   const onDrop = useCallback((accepted: File[]) => {
+    const alreadySet = new Set(alreadyUploaded);
+    const dupes = accepted.filter((f) => alreadySet.has(f.name));
+    const fresh = accepted.filter((f) => !alreadySet.has(f.name));
+    if (dupes.length) setDuplicateWarning(dupes.map((f) => f.name));
     setFiles((prev) => {
       const existing = new Set(prev.map((f) => f.name));
-      return [...prev, ...accepted.filter((f) => !existing.has(f.name))];
+      return [...prev, ...fresh.filter((f) => !existing.has(f.name))];
     });
-  }, []);
+  }, [alreadyUploaded]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop, accept: ACCEPTED, multiple: true,
@@ -576,6 +593,15 @@ function AddFilesModal({ onClose }: { onClose: () => void }) {
                       </div>
                       <span className="text-gray-400 text-xs ml-2 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {duplicateWarning.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="text-xs font-medium text-amber-700 mb-1">Already uploaded — skipped:</p>
+                  {duplicateWarning.map((name) => (
+                    <p key={name} className="text-xs text-amber-600 truncate">{name}</p>
                   ))}
                 </div>
               )}
