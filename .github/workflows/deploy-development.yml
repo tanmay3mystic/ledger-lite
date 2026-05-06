@@ -129,16 +129,11 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       - name: Deploy API → Railway staging
-        run: |
-          railway up \
-            --service "$RAILWAY_API_SERVICE_NAME" \
-            --environment staging \
-            --detach
+        run: railway up --environment staging --detach
         working-directory: apps/api
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_API_SERVICE_NAME: ${{ vars.RAILWAY_API_SERVICE_NAME }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_API_PROJECT_ID }}
 
   deploy-parser:
     name: Deploy Parser → Railway (staging)
@@ -163,13 +158,8 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy Parser → Railway staging
-        run: |
-          railway up \
-            --service "$RAILWAY_PARSER_SERVICE_NAME" \
-            --environment staging \
-            --detach
+        run: railway up --environment staging --detach
         working-directory: apps/parser
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_PARSER_SERVICE_NAME: ${{ vars.RAILWAY_PARSER_SERVICE_NAME }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PARSER_PROJECT_ID }}

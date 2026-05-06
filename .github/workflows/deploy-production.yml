@@ -131,16 +131,11 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy API → Railway production
-        run: |
-          railway up \
-            --service "$RAILWAY_API_SERVICE_NAME" \
-            --environment production \
-            --detach
+        run: railway up --environment production --detach
         working-directory: apps/api
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_API_SERVICE_NAME: ${{ vars.RAILWAY_API_SERVICE_NAME }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_API_PROJECT_ID }}
 
   deploy-parser:
     name: Deploy Parser → Railway (production)
@@ -154,13 +149,8 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy Parser → Railway production
-        run: |
-          railway up \
-            --service "$RAILWAY_PARSER_SERVICE_NAME" \
-            --environment production \
-            --detach
+        run: railway up --environment production --detach
         working-directory: apps/parser
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_PARSER_SERVICE_NAME: ${{ vars.RAILWAY_PARSER_SERVICE_NAME }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PARSER_PROJECT_ID }}
