@@ -296,7 +296,7 @@ function EditableCell({ value, type, displayValue, onChange }: EditableCellProps
       className="min-h-[24px] px-2 py-0.5 cursor-text rounded hover:bg-blue-50 transition-colors truncate"
       title={value}
     >
-      {displayValue ?? value || <span className="text-gray-300 italic text-xs">—</span>}
+      {(displayValue ?? value) || <span className="text-gray-300 italic text-xs">—</span>}
     </div>
   );
 }
