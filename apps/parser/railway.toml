@@ -1,13 +1,19 @@
-# Railway service configuration for the FastAPI parser.
-# Railway reads this file when `railway up` is run from this directory.
+# Railway reads this file from the service root directory.
+# Set "Root Directory" to apps/parser once in the Railway UI — everything else lives here.
+#
+# UI-only (cannot be expressed in TOML):
+#   - Root Directory : apps/parser
+#   - Branch         : development (staging) / production
+#   - Environment variables
+#   - Custom domains
 
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+builder      = "NIXPACKS"
+buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
-healthcheckPath = "/health"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
+startCommand          = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath       = "/health"
+healthcheckTimeout    = 300
+restartPolicyType     = "ON_FAILURE"
 restartPolicyMaxRetries = 10
