@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { uploadFiles } from "@/lib/api";
 import { useTransactionStore } from "@/store/transactionStore";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,14 @@ export function UploadScreen() {
       setTransactions(txns);
       setView("table");
     },
-    onError: () => setView("upload"),
+    onError: (err) => {
+      setView("upload");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Could not process your file. Please try again."
+      );
+    },
   });
 
   const onDrop = useCallback((accepted: File[]) => {
@@ -146,33 +154,104 @@ export function UploadScreen() {
           </button>
         )}
 
-        {uploadMutation.isError && (
-          <p className="mt-3 text-sm text-red-500 text-center">
-            Something went wrong. Make sure the API is running and try again.
-          </p>
-        )}
+        {/* FAQ */}
+        <div className="mt-8 space-y-1">
+          <Faq question="What file formats are supported?">
+            CSV (.csv), Excel (.xlsx), and legacy Excel (.xls). Most Indian bank
+            statement exports fall into one of these.
+          </Faq>
 
-        {/* Supported format hint */}
-        <div className="mt-8 flex items-start gap-2 text-xs text-gray-400 bg-gray-100 rounded-xl p-4">
-          <svg
-            className="w-4 h-4 mt-0.5 shrink-0 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>
-            Your file is processed locally and never stored. Works with most
-            Indian bank CSV exports (SBI, HDFC, ICICI, Axis).
-          </span>
+          <Faq question="What columns must the file have?">
+            <p className="mb-2">Two columns are <strong>required</strong>:</p>
+            <ul className="space-y-1 mb-2">
+              <li>
+                <span className="font-medium text-gray-700">Date</span>
+                {" "}— any of:{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Date</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Txn Date</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Transaction Date</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Value Date</span>, etc.
+              </li>
+              <li>
+                <span className="font-medium text-gray-700">Description</span>
+                {" "}— any of:{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Narration</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Particulars</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Description</span>,{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Remarks</span>, etc.
+              </li>
+            </ul>
+            <p>
+              For amounts, either separate{" "}
+              <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Debit</span>{" "}
+              /{" "}
+              <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Credit</span>{" "}
+              columns or a single{" "}
+              <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Amount</span>{" "}
+              column works.
+            </p>
+          </Faq>
+
+          <Faq question="Why did my file fail to parse?">
+            <ul className="space-y-1">
+              <li>The column headers don&apos;t match any recognised names above.</li>
+              <li>
+                The file has many rows of bank metadata before the actual table
+                — the parser skips up to 30 header rows automatically, but some
+                files exceed this.
+              </li>
+              <li>The file is password-protected or corrupted.</li>
+              <li>
+                The{" "}
+                <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">.xls</span>{" "}
+                file is actually an HTML table saved with an Excel extension
+                (common with some bank portals).
+              </li>
+            </ul>
+          </Faq>
+
+          <Faq question="Is my data safe?">
+            Your file is parsed entirely within the app — nothing is stored or
+            sent to any third party. Once you close the tab, the data is gone.
+          </Faq>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Faq({
+  question,
+  children,
+}: {
+  question: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <span className="text-sm font-medium text-gray-700">{question}</span>
+        <svg
+          className={cn(
+            "w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200",
+            open && "rotate-180"
+          )}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

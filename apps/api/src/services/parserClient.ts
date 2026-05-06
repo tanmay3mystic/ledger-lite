@@ -19,11 +19,20 @@ export async function parseFiles(
         contentType: file.mimetype,
       });
 
-      const { data } = await axios.post<{ transactions: Omit<Transaction, "id">[] }>(
-        `${PARSER_URL}/parse`,
-        form,
-        { headers: form.getHeaders(), timeout: 30_000 }
-      );
+      let data: { transactions: Omit<Transaction, "id">[] };
+      try {
+        ({ data } = await axios.post<{ transactions: Omit<Transaction, "id">[] }>(
+          `${PARSER_URL}/parse`,
+          form,
+          { headers: form.getHeaders(), timeout: 30_000 }
+        ));
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.data) {
+          const detail = err.response.data.detail ?? err.response.data.error ?? err.message;
+          throw new Error(`${file.originalname}: ${detail}`);
+        }
+        throw err;
+      }
 
       const tagged = data.transactions.map((t) => ({
         ...t,

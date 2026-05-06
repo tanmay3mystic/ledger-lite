@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
+import { toast } from "sonner";
 import { exportTransactions, uploadFiles } from "@/lib/api";
 import { useTransactionStore } from "@/store/transactionStore";
 import { cn, downloadBlob, formatCurrency } from "@/lib/utils";
@@ -509,6 +510,13 @@ function AddFilesModal({ onClose }: { onClose: () => void }) {
       setAddedCount(txns.length);
       setTimeout(onClose, 1400);
     },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Could not process your file. Please try again."
+      );
+    },
   });
 
   const onDrop = useCallback((accepted: File[]) => {
@@ -606,9 +614,6 @@ function AddFilesModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
-              {uploadMutation.isError && (
-                <p className="text-sm text-red-500 text-center">Upload failed. Check that all services are running.</p>
-              )}
             </>
           )}
         </div>

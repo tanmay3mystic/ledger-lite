@@ -9,12 +9,19 @@ export async function uploadFiles(files: File[]): Promise<Transaction[]> {
   const form = new FormData();
   files.forEach((f) => form.append("files", f));
 
-  const { data } = await api.post<{ transactions: Transaction[] }>(
-    "/api/upload",
-    form,
-    { headers: { "Content-Type": "multipart/form-data" } }
-  );
-  return data.transactions;
+  try {
+    const { data } = await api.post<{ transactions: Transaction[] }>(
+      "/api/upload",
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return data.transactions;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data?.error) {
+      throw new Error(err.response.data.error);
+    }
+    throw err;
+  }
 }
 
 export async function exportTransactions(
