@@ -119,6 +119,16 @@ jobs:
       # `railway up` from the service subdirectory uploads only that directory,
       # using the railway.toml there for build/start configuration.
       # --detach exits after upload so CI doesn't hang waiting for build logs.
+      - name: Verify Railway Token
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "TOKEN_EMPTY"
+            exit 1
+          else
+            echo "TOKEN_PRESENT"
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       - name: Deploy API → Railway staging
         run: |
           railway up \
@@ -141,6 +151,17 @@ jobs:
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+
+      - name: Verify Railway Token
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "TOKEN_EMPTY"
+            exit 1
+          else
+            echo "TOKEN_PRESENT"
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy Parser → Railway staging
         run: |
